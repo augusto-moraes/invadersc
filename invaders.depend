@@ -1,0 +1,6 @@
+# depslib dependency file v1.0
+1561763590 source:c:\users\ieuser\desktop\invaders\main.c
+	<windows.h>
+	<stdio.h>
+	<gl/gl.h>
+
