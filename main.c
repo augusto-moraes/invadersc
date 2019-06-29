@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <gl/gl.h>
+#include "SOIL.h"
 
 LRESULT CALLBACK WindowProc(HWND, UINT, WPARAM, LPARAM);
 void EnableOpenGL(HWND hwnd, HDC*, HGLRC*);
@@ -8,7 +9,7 @@ void DisableOpenGL(HWND, HDC, HGLRC);
 
 // Struct referente a nave
 struct Nave{
-    int pontos, vidas, dir;
+    int pontos, vidas, dir, viva;
     double x, y;
 };
 
@@ -18,13 +19,76 @@ struct Tiro{
     double x, y, xi, yi;
 };
 
+//==============================================================
+// Texturas
+//==============================================================
+
+GLuint naveTex2d;
+GLuint inimigoTex2d[12];
+GLuint tiroTex2d;
+GLuint morteTex2d[3];
+
+static void desenhaSprite(float coluna,float linha, GLuint tex);
+static GLuint carregaArqTextura(char *str);
+
+void carregaTexturas(){
+    int i;
+    char str[50];
+    for(i=1; i<=3; i++){
+        sprintf(str,".//Sprites//inimigo%d.png",i);
+        inimigoTex2d[i] = carregaArqTextura(str);
+
+        sprintf(str,".//Sprites//morte%d.png",i-3);
+        morteTex2d[i] = carregaArqTextura(str);
+    }
+
+    sprintf(str,".//Sprites//nave.png");
+    naveTex2d = carregaArqTextura(str);
+
+    sprintf(str,".//Sprites//tiro.png");
+    tiroTex2d = carregaArqTextura(str);
+}
+
+static GLuint carregaArqTextura(char *str){
+    // http://www.lonesock.net/soil.html
+    GLuint tex = SOIL_load_OGL_texture
+        (
+            str,
+            SOIL_LOAD_AUTO,
+            SOIL_CREATE_NEW_ID,
+            SOIL_FLAG_MIPMAPS | SOIL_FLAG_INVERT_Y |
+            SOIL_FLAG_NTSC_SAFE_RGB | SOIL_FLAG_COMPRESS_TO_DXT
+        );
+    /* check for an error during the load process */
+    if(0 == tex){
+        printf( "SOIL loading error: '%s'\n", SOIL_last_result() );
+    }
+    return tex;
+}
+
+void desenhaSprite(float coluna,float linha, GLuint tex){
+    glColor3f(1.0, 1.0, 1.0);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0f,0.0f); glVertex2f(coluna, linha);
+    glTexCoord2f(1.0f,0.0f); glVertex2f(coluna+0.1, linha);
+    glTexCoord2f(1.0f,1.0f); glVertex2f(coluna+0.1, linha+0.1);
+    glTexCoord2f(0.0f,1.0f); glVertex2f(coluna, linha+0.1);
+    glEnd();
+    glDisable(GL_BLEND);
+    glDisable(GL_TEXTURE_2D);
+}
+
 //Variaveis guia para os inimigos (Posicao e movimento)
 double xi[9] = {-0.525, -0.375, -0.225, -0.075, 0.075, 0.225, 0.375, 0.525, 0.675};
 double y[3] = {0.925, 0.775, 0.625};
 int alienDown=0, alienDir=0;
 
 //Bool referente ao gamemode
-int gamemode = 3, round=0;
+int gamemode = 1, round=0, animacao=0;
 
 //Limites da tela
 int limDir=8, limEsq=0;
@@ -44,6 +108,8 @@ void Menu();
 void Movimenta();
 void replay();
 void reset();
+void carregaTexturas();
+
 
 struct Nave nave;
 struct Tiro tiro;
@@ -243,6 +309,11 @@ void EnableOpenGL(HWND hwnd, HDC* hDC, HGLRC* hRC)
     *hRC = wglCreateContext(*hDC);
 
     wglMakeCurrent(*hDC, *hRC);
+
+    //textura
+    carregaTexturas();
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR); // Linear Filtering
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR); // Linear Filtering
 }
 
 void DisableOpenGL (HWND hwnd, HDC hDC, HGLRC hRC)
@@ -275,11 +346,13 @@ void reset(){
     limEsq=0;
     round=0;
     nave.pontos=0;
+    IniciaPlayer();
 }
 
 void replay(){
     DesenhaAliens();
     gamemode = 1;
+
     for(int j=0;j<3;j++)
         for(int x=0;x<9;x++)
             wave[j][x] = 1;
@@ -324,13 +397,7 @@ void DesenhaTela(){
 }
 
 void DesenhaNave(){
-    glBegin(GL_QUADS);
-    glColor3f(1.0f, 0.0f, 0.0f);
-    glVertex2f(nave.x+0.05, nave.y+0.1);
-    glVertex2f(nave.x+0.05, nave.y+0.2);
-    glVertex2f(nave.x-0.05, nave.y+0.2);
-    glVertex2f(nave.x-0.05, nave.y+0.1);
-    glEnd();
+    desenhaSprite(nave.x-0.05, nave.y+0.1, naveTex2d);
 
     if(nave.dir == -1 && nave.x-0.05 > -0.95)
         nave.x -= 0.01;
@@ -338,21 +405,29 @@ void DesenhaNave(){
         nave.x += 0.01;
 }
 
+void alienMorre(int j, int i){
+    animacao++;
+    if(animacao < 15)
+      desenhaSprite(xi[i],y[j], morteTex2d[1]);
+    else
+        if(animacao < 30)
+          desenhaSprite(xi[i],y[j], morteTex2d[1]);
+        else
+          desenhaSprite(xi[i],y[j], morteTex2d[2]);
+}
+
 void DesenhaAliens(){
     int i, j;
     for(j=0;j<3;j++){
         for(i=0;i<9;i++){
             if(wave[j][i]){
-                glBegin(GL_QUADS);
-                glColor3f(0.0f, 1.0f, 0.0f);
-                glVertex2f(xi[i]+0.05, y[j]-0.05);
-                glVertex2f(xi[i]+0.05, y[j]+0.05);
-                glVertex2f(xi[i]-0.05, y[j]+0.05);
-                glVertex2f(xi[i]-0.05, y[j]-0.05);
-                glEnd();
+
+                desenhaSprite(xi[i]-0.05, y[j]-0.05, inimigoTex2d[3-j]);
 
                 if(tiro.tela && ((tiro.x-0.01 >= xi[i]-0.05 && tiro.x - 0.01 <= xi[i] + 0.05 && tiro.y <= y[j]+0.05 && tiro.y+0.01 >= y[j]-0.05) || (tiro.x+0.01 >= xi[i]-0.05 && tiro.x+0.01 <= xi[i] + 0.05 && tiro.y <= y[j]+0.05 && tiro.y+0.01 >= y[j]-0.05))){
                     tiro.tela = 0;
+                    //alienMorre(j, i);
+                    animacao = 0;
                     wave[j][i] = 0;
                     tiro.shoot = 0;
                     velocidadeColisao -= 0.25;
@@ -412,6 +487,9 @@ void DesenhaTiro(){
         glVertex2f(tiro.x + 0.01, tiro.y+0.07);
         glVertex2f(tiro.x - 0.01, tiro.y+0.07);
         glEnd();
+
+        desenhaSprite(tiro.x-0.05, tiro.y, tiroTex2d);
+
     }
     if(tiro.y > 1){
         tiro.tela = 0;
