@@ -1,0 +1,25 @@
+# depslib dependency file v1.0
+1561769256 source:c:\users\ieuser\desktop\pacman\main.c
+	<windows.h>
+	<stdio.h>
+	<gl/gl.h>
+	"SOIL.h"
+
+1560547461 c:\users\ieuser\desktop\pacman\soil.h
+
+1561914501 source:c:\users\ieuser\desktop\spaceinvaders\main.c
+	<windows.h>
+	<stdio.h>
+	<gl/gl.h>
+	"SOIL.h"
+
+1560547461 c:\users\ieuser\desktop\spaceinvaders\soil.h
+
+1561916605 source:f:\spaceinvaders\main.c
+	<windows.h>
+	<stdio.h>
+	<gl/gl.h>
+	"SOIL.h"
+
+1560547461 f:\spaceinvaders\soil.h
+
